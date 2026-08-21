@@ -1,13 +1,12 @@
 """
 MetricMind Query Parser
 
-Day-1 version:
-A deterministic parser is used first.
+This is the Day-1 fallback parser.
 
-This gives us a reliable fallback even without an LLM.
+It converts natural-language questions into
+MetricMind's governed metric names.
 
-Later:
-Gemini / LangChain will replace or enhance this module.
+Later, Gemini will perform this intent extraction.
 """
 
 import re
@@ -27,25 +26,81 @@ PRODUCTS = [
 ]
 
 
+# =========================================================
+# METRIC SYNONYMS
+# =========================================================
+
+METRIC_SYNONYMS = {
+
+    "revenue": [
+        "revenue",
+        "sales",
+        "income",
+        "earnings",
+        "money made",
+        "money we made",
+        "amount made",
+        "turnover",
+        "generated",
+        "made from",
+        "made in",
+        "how much did we make",
+        "how much money did we make",
+        "how much money we made"
+    ],
+
+    "cost": [
+        "cost",
+        "costs",
+        "expense",
+        "expenses",
+        "spending",
+        "spent"
+    ],
+
+    "profit": [
+        "profit",
+        "profits",
+        "profitability",
+        "net profit",
+        "money earned"
+    ],
+
+    "margin": [
+        "margin",
+        "margins",
+        "profit margin",
+        "margin percentage",
+        "profit percentage"
+    ]
+}
+
+
+# =========================================================
+# DETECT METRIC
+# =========================================================
+
 def detect_metric(question: str):
 
-    q = question.lower()
+    q = question.lower().strip()
 
-    # Order matters.
-    if "margin" in q:
-        return "margin"
+    # Check longer phrases first.
+    # This prevents short words from interfering.
 
-    if "profit" in q:
-        return "profit"
+    for metric, phrases in METRIC_SYNONYMS.items():
 
-    if "cost" in q or "expense" in q:
-        return "cost"
+        for phrase in phrases:
 
-    if "revenue" in q or "sales" in q:
-        return "revenue"
+            if phrase in q:
+
+                return metric
 
     return None
 
+
+# =========================================================
+# DETECT REGION
+# =========================================================
 
 def detect_region(question: str):
 
@@ -54,10 +109,15 @@ def detect_region(question: str):
     for region in REGIONS:
 
         if region.lower() in q:
+
             return region
 
     return None
 
+
+# =========================================================
+# DETECT PRODUCT
+# =========================================================
 
 def detect_product(question: str):
 
@@ -66,10 +126,15 @@ def detect_product(question: str):
     for product in PRODUCTS:
 
         if product.lower() in q:
+
             return product
 
     return None
 
+
+# =========================================================
+# PARSE QUESTION
+# =========================================================
 
 def parse_question(question: str):
 
@@ -80,7 +145,11 @@ def parse_question(question: str):
     product = detect_product(question)
 
     return {
+
         "metric": metric,
+
         "region": region,
+
         "product": product
+
     }

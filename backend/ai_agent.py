@@ -1,28 +1,40 @@
 """
 MetricMind Gemini Agent
 
-The LLM is used to understand the user's question.
+Gemini's job:
+    Understand the user's natural-language question.
 
-The LLM does NOT directly access the database.
+Gemini does NOT:
+    - calculate revenue
+    - calculate margin
+    - access the CSV
+    - generate SQL
 
-Instead, it returns a structured request
-that MetricMind validates before calling
-the Semantic Layer.
+Gemini only converts the question into
+a controlled MetricMind intent.
 """
 
 import os
 import json
 
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
 
 # =========================================================
-# CLIENT
+# LOAD ENVIRONMENT VARIABLES
 # =========================================================
+
+load_dotenv()
+
 
 API_KEY = os.getenv("GEMINI_API_KEY")
 
+
+# =========================================================
+# CREATE GEMINI CLIENT
+# =========================================================
 
 if API_KEY:
 
@@ -36,54 +48,54 @@ else:
 
 
 # =========================================================
-# SEMANTIC SCHEMA
+# ALLOWED VALUES
 # =========================================================
 
-SEMANTIC_SCHEMA = """
-
-MetricMind supports these metrics:
-
-1. revenue
-   Formula: SUM(revenue)
-
-2. cost
-   Formula: SUM(cost)
-
-3. profit
-   Formula: Revenue - Cost
-
-4. margin
-   Formula: (Revenue - Cost) / Revenue
+ALLOWED_METRICS = [
+    "revenue",
+    "cost",
+    "profit",
+    "margin"
+]
 
 
-Supported regions:
+ALLOWED_REGIONS = [
+    "Europe",
+    "Asia",
+    "North America"
+]
 
-- Europe
-- Asia
-- North America
 
-
-Supported products:
-
-- Software
-- Hardware
-- Services
-
-The model must NEVER invent a new metric.
-
-The model must NEVER generate SQL.
-
-The model must return only the metric and filters
-required to query the MetricMind Semantic Layer.
-
-"""
+ALLOWED_PRODUCTS = [
+    "Software",
+    "Hardware",
+    "Services"
+]
 
 
 # =========================================================
-# INTENT EXTRACTION
+# GEMINI INTENT EXTRACTION
 # =========================================================
 
 def extract_intent(question: str):
+
+    """
+    Convert natural language into a controlled
+    MetricMind query.
+
+    Example:
+
+    User:
+        How much money did we make from Europe?
+
+    Gemini:
+
+        {
+            "metric": "revenue",
+            "region": "Europe",
+            "product": null
+        }
+    """
 
     if not client:
 
@@ -91,62 +103,238 @@ def extract_intent(question: str):
 
 
     prompt = f"""
+You are the natural-language intent engine
+for a Business Intelligence system called MetricMind.
 
-You are the intent extraction component
-of MetricMind.
+Your ONLY job is to identify which approved business
+metric and filters the user is asking for.
 
-MetricMind is a governed business intelligence
-system.
+You must NOT calculate the answer.
 
-Your job is to understand the user's question
-and map it to the approved Semantic Layer.
+You must NOT generate SQL.
 
-{SEMANTIC_SCHEMA}
+You must NOT invent metrics.
 
-User question:
+You must only select from the approved values below.
+
+APPROVED METRICS:
+
+- revenue
+- cost
+- profit
+- margin
+
+APPROVED REGIONS:
+
+- Europe
+- Asia
+- North America
+
+APPROVED PRODUCTS:
+
+- Software
+- Hardware
+- Services
+
+METRIC MEANINGS:
+
+revenue:
+Total money generated from sales.
+
+cost:
+Total cost associated with sales.
+
+profit:
+Revenue minus Cost.
+
+margin:
+(Revenue - Cost) / Revenue.
+
+IMPORTANT INTERPRETATION RULES:
+
+"sales", "money made", "money earned",
+"amount generated", "income", "turnover"
+usually mean revenue.
+
+"spent", "expenses", "spending", "costs"
+usually mean cost.
+
+"profitability", "profit earned"
+usually mean profit.
+
+"margin percentage", "profit margin"
+means margin.
+
+The user question is:
 
 {question}
 
-Return JSON only.
+Return ONLY valid JSON.
 
-Required format:
+The JSON must have exactly these fields:
 
 {{
     "metric": "revenue",
-    "region": null,
+    "region": "Europe",
     "product": null
 }}
 
-Rules:
+If a region is not mentioned, use null.
 
-- metric must be one of:
-  revenue, cost, profit, margin
+If a product is not mentioned, use null.
 
-- region must be:
-  Europe, Asia, North America, or null
-
-- product must be:
-  Software, Hardware, Services, or null
-
-- Never invent values.
-
-- Never generate SQL.
+If the question cannot be mapped to an approved metric,
+use null for metric.
 """
 
 
-    response = client.models.generate_content(
+    try:
 
-        model="gemini-2.5-flash",
+        response = client.models.generate_content(
 
-        contents=prompt,
+            model="gemini-2.5-flash",
 
-        config=types.GenerateContentConfig(
+            contents=prompt,
 
-            response_mime_type="application/json"
+            config=types.GenerateContentConfig(
+
+                response_mime_type="application/json",
+
+                response_schema={
+                    "type": "object",
+
+                    "properties": {
+
+                        "metric": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "enum": [
+                                "revenue",
+                                "cost",
+                                "profit",
+                                "margin",
+                                None
+                            ]
+                        },
+
+                        "region": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+
+                        "product": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        }
+
+                    },
+
+                    "required": [
+                        "metric",
+                        "region",
+                        "product"
+                    ]
+                }
+
+            )
 
         )
 
+
+        result = json.loads(
+            response.text
+        )
+
+
+        return validate_intent(result)
+
+
+    except Exception as error:
+
+        print(
+            "Gemini error:",
+            error
+        )
+
+        return None
+
+
+# =========================================================
+# VALIDATE GEMINI OUTPUT
+# =========================================================
+
+def validate_intent(intent):
+
+    """
+    Never trust the LLM output blindly.
+
+    Validate everything against our approved
+    Semantic Layer values.
+    """
+
+    if not isinstance(intent, dict):
+
+        return None
+
+
+    metric = intent.get(
+        "metric"
+    )
+
+    region = intent.get(
+        "region"
+    )
+
+    product = intent.get(
+        "product"
     )
 
 
-    return json.loads(response.text)
+    # -----------------------------------------------------
+    # Validate metric
+    # -----------------------------------------------------
+
+    if metric is not None:
+
+        if metric not in ALLOWED_METRICS:
+
+            return None
+
+
+    # -----------------------------------------------------
+    # Validate region
+    # -----------------------------------------------------
+
+    if region is not None:
+
+        if region not in ALLOWED_REGIONS:
+
+            region = None
+
+
+    # -----------------------------------------------------
+    # Validate product
+    # -----------------------------------------------------
+
+    if product is not None:
+
+        if product not in ALLOWED_PRODUCTS:
+
+            product = None
+
+
+    return {
+
+        "metric": metric,
+
+        "region": region,
+
+        "product": product
+
+    }
