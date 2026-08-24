@@ -19,6 +19,7 @@ The Semantic Engine performs the actual calculation.
 
 import os
 import pandas as pd
+from backend.database import engine
 
 from semantic_layer.metrics import (
     get_metric,
@@ -26,28 +27,32 @@ from semantic_layer.metrics import (
     get_available_dimensions
 )
 
-
 # ---------------------------------------------------------
-# FIND DATA FILE
+# LOAD DATA FROM POSTGRESQL
 # ---------------------------------------------------------
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-DATA_PATH = os.path.join(
-    BASE_DIR,
-    "data",
-    "sales.csv"
+df = pd.read_sql(
+    """
+    SELECT
+        s.sale_id,
+        s.sale_date AS date,
+        s.customer_id,
+        s.product_id,
+        p.product_name AS product,
+        s.region,
+        s.quantity,
+        s.unit_price,
+        s.discount,
+        s.revenue,
+        s.cost,
+        s.profit,
+        s.margin
+    FROM sales s
+    LEFT JOIN products p
+        ON s.product_id = p.product_id
+    """,
+    engine
 )
-
-
-# ---------------------------------------------------------
-# LOAD DATA
-# ---------------------------------------------------------
-
-df = pd.read_csv(DATA_PATH)
-
-df["date"] = pd.to_datetime(df["date"])
-
 
 # ---------------------------------------------------------
 # APPLY FILTERS

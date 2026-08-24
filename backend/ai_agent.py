@@ -6,16 +6,22 @@ Gemini's job:
 
 Gemini does NOT:
     - calculate revenue
+    - calculate cost
+    - calculate profit
     - calculate margin
-    - access the CSV
+    - access PostgreSQL directly
     - generate SQL
 
-Gemini only converts the question into
-a controlled MetricMind intent.
+Gemini converts the question into a controlled
+MetricMind intent.
+
+Python performs the final validation so that
+Gemini cannot invent filters.
 """
 
 import os
 import json
+import re
 
 from dotenv import load_dotenv
 from google import genai
@@ -27,7 +33,6 @@ from google.genai import types
 # =========================================================
 
 load_dotenv()
-
 
 API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -48,7 +53,7 @@ else:
 
 
 # =========================================================
-# ALLOWED VALUES
+# APPROVED METRICS
 # =========================================================
 
 ALLOWED_METRICS = [
@@ -59,18 +64,70 @@ ALLOWED_METRICS = [
 ]
 
 
+# =========================================================
+# APPROVED REGIONS
+# =========================================================
+
 ALLOWED_REGIONS = [
-    "Europe",
     "Asia",
-    "North America"
+    "North America",
+    "Oceania"
 ]
 
+
+# =========================================================
+# APPROVED PRODUCTS
+# =========================================================
 
 ALLOWED_PRODUCTS = [
-    "Software",
-    "Hardware",
-    "Services"
+    "Analytics Basic",
+    "Analytics Pro",
+    "Analytics Enterprise",
+    "CRM Enterprise",
+    "Cloud Pro"
 ]
+
+
+# =========================================================
+# FIND EXPLICIT REGION
+# =========================================================
+
+def find_region_in_question(question: str):
+    """
+    Find a region only if it actually appears
+    in the user's question.
+    """
+
+    question_lower = question.lower()
+
+    for region in ALLOWED_REGIONS:
+
+        if region.lower() in question_lower:
+
+            return region
+
+    return None
+
+
+# =========================================================
+# FIND EXPLICIT PRODUCT
+# =========================================================
+
+def find_product_in_question(question: str):
+    """
+    Find a product only if it actually appears
+    in the user's question.
+    """
+
+    question_lower = question.lower()
+
+    for product in ALLOWED_PRODUCTS:
+
+        if product.lower() in question_lower:
+
+            return product
+
+    return None
 
 
 # =========================================================
@@ -83,116 +140,296 @@ def extract_intent(question: str):
     Convert natural language into a controlled
     MetricMind query.
 
-    Example:
+    Examples:
 
-    User:
-        How much money did we make from Europe?
+    What is our total revenue?
 
-    Gemini:
+    {
+        "metric": "revenue",
+        "region": None,
+        "product": None
+    }
 
-        {
-            "metric": "revenue",
-            "region": "Europe",
-            "product": null
-        }
+
+    What is our revenue in Asia?
+
+    {
+        "metric": "revenue",
+        "region": "Asia",
+        "product": None
+    }
+
+
+    What is the revenue for Analytics Pro?
+
+    {
+        "metric": "revenue",
+        "region": None,
+        "product": "Analytics Pro"
+    }
     """
 
-    if not client:
+    # =====================================================
+    # BASIC VALIDATION
+    # =====================================================
+
+    if not question or not question.strip():
 
         return None
 
+
+    question = question.strip()
+
+
+    # =====================================================
+    # CHECK GEMINI CLIENT
+    # =====================================================
+
+    if not client:
+
+        print(
+            "Gemini client is not available."
+        )
+
+        return None
+
+
+    # =====================================================
+    # GEMINI PROMPT
+    # =====================================================
 
     prompt = f"""
 You are the natural-language intent engine
 for a Business Intelligence system called MetricMind.
 
-Your ONLY job is to identify which approved business
-metric and filters the user is asking for.
+Your ONLY job is to identify the business metric
+from the user's question.
 
-You must NOT calculate the answer.
+You may also identify a region or product,
+but you MUST NOT guess them.
 
-You must NOT generate SQL.
+You MUST NOT:
 
-You must NOT invent metrics.
+- calculate the answer
+- generate SQL
+- access PostgreSQL
+- invent metrics
+- invent regions
+- invent products
+- assume missing filters
 
-You must only select from the approved values below.
 
-APPROVED METRICS:
+=========================================================
+APPROVED METRICS
+=========================================================
 
-- revenue
-- cost
-- profit
-- margin
+revenue
+cost
+profit
+margin
 
-APPROVED REGIONS:
 
-- Europe
-- Asia
-- North America
+=========================================================
+APPROVED REGIONS
+=========================================================
 
-APPROVED PRODUCTS:
+Asia
+North America
+Oceania
 
-- Software
-- Hardware
-- Services
 
-METRIC MEANINGS:
+=========================================================
+APPROVED PRODUCTS
+=========================================================
+
+Analytics Basic
+Analytics Pro
+Analytics Enterprise
+CRM Enterprise
+Cloud Pro
+
+
+=========================================================
+METRIC MEANINGS
+=========================================================
 
 revenue:
+
 Total money generated from sales.
 
 cost:
+
 Total cost associated with sales.
 
 profit:
+
 Revenue minus Cost.
 
 margin:
+
 (Revenue - Cost) / Revenue.
 
-IMPORTANT INTERPRETATION RULES:
 
-"sales", "money made", "money earned",
-"amount generated", "income", "turnover"
-usually mean revenue.
+=========================================================
+INTERPRETATION
+=========================================================
 
-"spent", "expenses", "spending", "costs"
-usually mean cost.
+"sales"
+"money made"
+"money earned"
+"amount generated"
+"income"
+"turnover"
 
-"profitability", "profit earned"
-usually mean profit.
+usually mean:
 
-"margin percentage", "profit margin"
-means margin.
+revenue
 
-The user question is:
 
-{question}
+"spent"
+"expenses"
+"spending"
+"costs"
 
-Return ONLY valid JSON.
+usually mean:
 
-The JSON must have exactly these fields:
+cost
+
+
+"profitability"
+"profit earned"
+"net profit"
+
+usually mean:
+
+profit
+
+
+"margin percentage"
+"profit margin"
+
+means:
+
+margin
+
+
+=========================================================
+FILTER RULES
+=========================================================
+
+If the user does not explicitly mention a region,
+return:
+
+region = null
+
+If the user does not explicitly mention a product,
+return:
+
+product = null
+
+NEVER assume Asia.
+
+NEVER assume North America.
+
+NEVER assume Oceania.
+
+NEVER assume a product.
+
+The examples below are NOT values to copy.
+They only explain how the system works.
+
+
+=========================================================
+EXAMPLES
+=========================================================
+
+Question:
+
+What is our total revenue?
+
+Return:
 
 {{
     "metric": "revenue",
-    "region": "Europe",
+    "region": null,
     "product": null
 }}
 
-If a region is not mentioned, use null.
 
-If a product is not mentioned, use null.
+Question:
 
-If the question cannot be mapped to an approved metric,
-use null for metric.
+What is our revenue in Asia?
+
+Return:
+
+{{
+    "metric": "revenue",
+    "region": "Asia",
+    "product": null
+}}
+
+
+Question:
+
+What is the revenue for Analytics Pro?
+
+Return:
+
+{{
+    "metric": "revenue",
+    "region": null,
+    "product": "Analytics Pro"
+}}
+
+
+Question:
+
+What is the profit in North America for Cloud Pro?
+
+Return:
+
+{{
+    "metric": "profit",
+    "region": "North America",
+    "product": "Cloud Pro"
+}}
+
+
+=========================================================
+USER QUESTION
+=========================================================
+
+{question}
+
+
+=========================================================
+OUTPUT
+=========================================================
+
+Return ONLY valid JSON.
+
+Return exactly:
+
+{{
+    "metric": "...",
+    "region": null,
+    "product": null
+}}
+
+Use null when a filter was not explicitly
+mentioned by the user.
 """
 
+
+    # =====================================================
+    # CALL GEMINI
+    # =====================================================
 
     try:
 
         response = client.models.generate_content(
 
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
 
             contents=prompt,
 
@@ -201,36 +438,21 @@ use null for metric.
                 response_mime_type="application/json",
 
                 response_schema={
-                    "type": "object",
+
+                    "type": "OBJECT",
 
                     "properties": {
 
                         "metric": {
-                            "type": [
-                                "string",
-                                "null"
-                            ],
-                            "enum": [
-                                "revenue",
-                                "cost",
-                                "profit",
-                                "margin",
-                                None
-                            ]
+                            "type": "STRING"
                         },
 
                         "region": {
-                            "type": [
-                                "string",
-                                "null"
-                            ]
+                            "type": "STRING"
                         },
 
                         "product": {
-                            "type": [
-                                "string",
-                                "null"
-                            ]
+                            "type": "STRING"
                         }
 
                     },
@@ -240,6 +462,7 @@ use null for metric.
                         "region",
                         "product"
                     ]
+
                 }
 
             )
@@ -247,12 +470,69 @@ use null for metric.
         )
 
 
+        # =================================================
+        # PARSE GEMINI RESPONSE
+        # =================================================
+
         result = json.loads(
             response.text
         )
 
 
-        return validate_intent(result)
+        # =================================================
+        # VALIDATE METRIC
+        # =================================================
+
+        metric = result.get(
+            "metric"
+        )
+
+
+        if metric:
+
+            metric = str(
+                metric
+            ).lower().strip()
+
+
+            if metric not in ALLOWED_METRICS:
+
+                metric = None
+
+
+        else:
+
+            metric = None
+
+
+        # =================================================
+        # DO NOT TRUST GEMINI FOR FILTERS
+        #
+        # Find filters directly in the user's question.
+        # =================================================
+
+        region = find_region_in_question(
+            question
+        )
+
+        product = find_product_in_question(
+            question
+        )
+
+
+        # =================================================
+        # RETURN CONTROLLED INTENT
+        # =================================================
+
+        return {
+
+            "metric": metric,
+
+            "region": region,
+
+            "product": product
+
+        }
 
 
     except Exception as error:
@@ -263,78 +543,5 @@ use null for metric.
         )
 
         return None
-
-
-# =========================================================
-# VALIDATE GEMINI OUTPUT
-# =========================================================
-
-def validate_intent(intent):
-
-    """
-    Never trust the LLM output blindly.
-
-    Validate everything against our approved
-    Semantic Layer values.
-    """
-
-    if not isinstance(intent, dict):
-
-        return None
-
-
-    metric = intent.get(
-        "metric"
-    )
-
-    region = intent.get(
-        "region"
-    )
-
-    product = intent.get(
-        "product"
-    )
-
-
-    # -----------------------------------------------------
-    # Validate metric
-    # -----------------------------------------------------
-
-    if metric is not None:
-
-        if metric not in ALLOWED_METRICS:
-
-            return None
-
-
-    # -----------------------------------------------------
-    # Validate region
-    # -----------------------------------------------------
-
-    if region is not None:
-
-        if region not in ALLOWED_REGIONS:
-
-            region = None
-
-
-    # -----------------------------------------------------
-    # Validate product
-    # -----------------------------------------------------
-
-    if product is not None:
-
-        if product not in ALLOWED_PRODUCTS:
-
-            product = None
-
-
-    return {
-
-        "metric": metric,
-
-        "region": region,
-
-        "product": product
-
-    }
+    
+    

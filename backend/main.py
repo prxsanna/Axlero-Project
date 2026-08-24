@@ -2,6 +2,22 @@
 MetricMind API
 
 Main FastAPI application.
+
+Flow:
+
+User Question
+      ↓
+Gemini
+      ↓
+Controlled Intent
+      ↓
+MetricMind Semantic Engine
+      ↓
+PostgreSQL
+      ↓
+Calculated Metric
+      ↓
+API Response
 """
 
 from fastapi import FastAPI, HTTPException
@@ -14,7 +30,7 @@ from backend.semantic_engine import (
     get_dataset_summary
 )
 
-from backend.query_parser import parse_question
+from backend.ai_agent import extract_intent
 
 
 # =========================================================
@@ -99,6 +115,7 @@ def metrics():
 
     return {
         "metrics": [
+
             {
                 "name": "Revenue",
                 "id": "revenue",
@@ -122,6 +139,7 @@ def metrics():
                 "id": "margin",
                 "formula": "(Revenue - Cost) / Revenue"
             }
+
         ]
     }
 
@@ -162,7 +180,12 @@ def query_metric(
 @app.post("/api/ask")
 def ask_metricmind(request: QuestionRequest):
 
+    # -----------------------------------------------------
+    # Get the user's question
+    # -----------------------------------------------------
+
     question = request.question.strip()
+
 
     if not question:
 
@@ -171,12 +194,38 @@ def ask_metricmind(request: QuestionRequest):
             detail="Question cannot be empty."
         )
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # STEP 1
-    # Parse natural language.
+    # GEMINI UNDERSTANDS THE QUESTION
+    # =====================================================
+
+    parsed = extract_intent(
+        question
+    )
+
+
+    # -----------------------------------------------------
+    # Gemini failed
     # -----------------------------------------------------
 
-    parsed = parse_question(question)
+    if not parsed:
+
+        return {
+
+            "success": False,
+
+            "message": (
+                "Gemini could not understand "
+                "the question."
+            )
+
+        }
+
+
+    # -----------------------------------------------------
+    # Get controlled values
+    # -----------------------------------------------------
 
     metric = parsed["metric"]
 
@@ -184,14 +233,16 @@ def ask_metricmind(request: QuestionRequest):
 
     product = parsed["product"]
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # STEP 2
-    # Check whether we understand the metric.
-    # -----------------------------------------------------
+    # CHECK METRIC
+    # =====================================================
 
     if not metric:
 
         return {
+
             "success": False,
 
             "message": (
@@ -201,54 +252,74 @@ def ask_metricmind(request: QuestionRequest):
             ),
 
             "available_metrics": [
+
                 "revenue",
                 "cost",
                 "profit",
                 "margin"
+
             ]
+
         }
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # STEP 3
-    # Ask the Semantic Layer.
-    # -----------------------------------------------------
+    # SEMANTIC ENGINE
+    # =====================================================
 
     try:
 
         result = calculate_metric(
+
             metric=metric,
+
             region=region,
+
             product=product
+
         )
+
 
     except ValueError as error:
 
         return {
+
             "success": False,
+
             "message": str(error)
+
         }
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # STEP 4
-    # Build user-friendly response.
-    # -----------------------------------------------------
+    # FORMAT VALUE
+    # =====================================================
 
     value = result["value"]
 
+
     if metric == "margin":
 
-        formatted_value = f"{value * 100:.2f}%"
+        formatted_value = (
+            f"{value * 100:.2f}%"
+        )
 
     else:
 
-        formatted_value = f"${value:,.0f}"
+        formatted_value = (
+            f"${value:,.0f}"
+        )
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # STEP 5
-    # Explanation.
-    # -----------------------------------------------------
+    # BUILD FILTER DESCRIPTION
+    # =====================================================
 
     filter_text = []
+
 
     if region:
 
@@ -256,17 +327,25 @@ def ask_metricmind(request: QuestionRequest):
             f"Region: {region}"
         )
 
+
     if product:
 
         filter_text.append(
             f"Product: {product}"
         )
 
+
     if not filter_text:
 
         filter_text.append(
             "All available data"
         )
+
+
+    # =====================================================
+    # STEP 6
+    # FINAL RESPONSE
+    # =====================================================
 
     return {
 
@@ -287,18 +366,27 @@ def ask_metricmind(request: QuestionRequest):
         "rows_used": result["rows_used"],
 
         "explanation": (
-            f"{result['metric']} is {formatted_value}. "
-            f"The calculation used the governed definition "
+
+            f"{result['metric']} is "
+            f"{formatted_value}. "
+
+            f"The calculation used the "
+            f"governed definition "
+
             f"'{result['formula']}'."
+
         ),
 
         "governance": {
 
-            "semantic_layer": "MetricMind Semantic Layer",
+            "semantic_layer":
+                "MetricMind Semantic Layer",
 
-            "raw_sql_generated": False,
+            "raw_sql_generated":
+                False,
 
-            "metric_validated": True
+            "metric_validated":
+                True
 
         }
 
@@ -310,10 +398,14 @@ def ask_metricmind(request: QuestionRequest):
 # =========================================================
 
 app.mount(
+
     "/",
+
     StaticFiles(
         directory="frontend",
         html=True
     ),
+
     name="frontend"
+
 )
