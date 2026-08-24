@@ -19,18 +19,6 @@
     "react-dom": "^18.2.0",
     "tailwind-merge": "^2.2.2"
   },
-  "optionalDependencies": {
-    "@next/swc-chromium-x64-gnu": "14.2.5",
-    "@next/swc-darwin-arm64": "14.2.5",
-    "@next/swc-darwin-x64": "14.2.5",
-    "@next/swc-linux-arm64-gnu": "14.2.5",
-    "@next/swc-linux-arm64-musl": "14.2.5",
-    "@next/swc-linux-x64-gnu": "14.2.5",
-    "@next/swc-linux-x64-musl": "14.2.5",
-    "@next/swc-win32-arm64-msvc": "14.2.5",
-    "@next/swc-win32-ia32-msvc": "14.2.5",
-    "@next/swc-win32-x64-msvc": "14.2.5"
-  },
   "devDependencies": {
     "@types/node": "^20.11.30",
     "@types/react": "^18.2.67",

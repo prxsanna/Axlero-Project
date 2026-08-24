@@ -1,25 +1,12 @@
 # Python
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 *.so
 .Python
 env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-# lib/ (removed to allow frontend/src/lib)
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+.venv/
 venv/
 ENV/
 
@@ -50,3 +37,5 @@ frontend/build
 *.swp
 *.swo
 .DS_Store
+.ipynb_checkpoints/
+.pytest_cache/
