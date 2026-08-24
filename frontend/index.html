@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>MetricMind</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #1f2937;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 900px;
+            margin: 60px auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 35px;
+        }
+
+        .header h1 {
+            font-size: 42px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 17px;
+        }
+
+        .question-box {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            padding: 15px;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            font-size: 16px;
+            resize: vertical;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: #6366f1;
+        }
+
+        button {
+            margin-top: 15px;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            background: #4f46e5;
+            color: white;
+            font-size: 17px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #4338ca;
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .result-card {
+            display: none;
+            margin-top: 25px;
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .result-card h2 {
+            margin-bottom: 20px;
+        }
+
+        .metric-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 10px 0 20px;
+        }
+
+        .info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .error {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background: #fee2e2;
+            color: #991b1b;
+            border-radius: 10px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 15px;
+            color: #6b7280;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>MetricMind</h1>
+        <p>Governed Conversational Business Intelligence</p>
+    </div>
+
+    <div class="question-box">
+
+        <textarea
+            id="question"
+            placeholder="Ask a business question...&#10;&#10;Example: What is the revenue in Europe?"
+        ></textarea>
+
+        <button id="askButton" onclick="askMetricMind()">
+            Ask MetricMind
+        </button>
+
+        <div class="loading" id="loading">
+            Calculating your metric...
+        </div>
+
+        <div class="error" id="error"></div>
+
+    </div>
+
+    <div class="result-card" id="resultCard">
+
+        <h2>Result</h2>
+
+        <div class="metric-value" id="metricValue">
+            -
+        </div>
+
+        <div class="info">
+            <strong>Metric:</strong>
+            <span id="metricName">-</span>
+        </div>
+
+        <div class="info">
+            <strong>Formula:</strong>
+            <span id="formula">-</span>
+        </div>
+
+        <div class="info">
+            <strong>Region:</strong>
+            <span id="region">-</span>
+        </div>
+
+        <div class="info">
+            <strong>Product:</strong>
+            <span id="product">-</span>
+        </div>
+
+        <div class="info">
+            <strong>Rows Analyzed:</strong>
+            <span id="rows">-</span>
+        </div>
+
+        <div class="info">
+            <strong>Governance:</strong>
+            Approved Semantic Layer Metric
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+async function askMetricMind() {
+
+    const question = document.getElementById("question").value.trim();
+
+    const button = document.getElementById("askButton");
+    const loading = document.getElementById("loading");
+    const error = document.getElementById("error");
+    const resultCard = document.getElementById("resultCard");
+
+    // Check empty question
+    if (!question) {
+        error.style.display = "block";
+        error.textContent = "Please enter a business question.";
+        resultCard.style.display = "none";
+        return;
+    }
+
+    // Reset UI
+    error.style.display = "none";
+    resultCard.style.display = "none";
+
+    button.disabled = true;
+    loading.style.display = "block";
+
+    try {
+
+        const response = await fetch("/api/ask", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                question: question
+            })
+
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+
+            throw new Error(
+                data.message || "Unable to process the question."
+            );
+
+        }
+
+        const result = data.result;
+
+        // Display metric value
+        document.getElementById("metricValue").textContent =
+            result.value.toLocaleString();
+
+        // Display metric information
+        document.getElementById("metricName").textContent =
+            result.metric;
+
+        document.getElementById("formula").textContent =
+            result.formula;
+
+        document.getElementById("region").textContent =
+            result.region || "All Regions";
+
+        document.getElementById("product").textContent =
+            result.product || "All Products";
+
+        document.getElementById("rows").textContent =
+            result.rows_analyzed;
+
+        // Show result
+        resultCard.style.display = "block";
+
+    } catch (err) {
+
+        error.style.display = "block";
+        error.textContent = err.message;
+
+    } finally {
+
+        button.disabled = false;
+        loading.style.display = "none";
+
+    }
+}
+
+</script>
+
+</body>
+</html>
