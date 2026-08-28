@@ -1,0 +1,21 @@
+product_id,product_name,category,tier,monthly_price
+PROD001,Analytics Basic,Analytics,Basic,49
+PROD002,Analytics Pro,Analytics,Pro,149
+PROD003,Analytics Enterprise,Analytics,Enterprise,499
+PROD004,Cloud Starter,Cloud,Basic,79
+PROD005,Cloud Pro,Cloud,Pro,199
+PROD006,Cloud Enterprise,Cloud,Enterprise,599
+PROD007,Security Basic,Security,Basic,59
+PROD008,Security Pro,Security,Pro,179
+PROD009,Security Enterprise,Security,Enterprise,549
+PROD010,CRM Starter,CRM,Basic,39
+PROD011,CRM Pro,CRM,Pro,129
+PROD012,CRM Enterprise,CRM,Enterprise,449
+PROD013,Data Platform Basic,Data Platform,Basic,89
+PROD014,Data Platform Pro,Data Platform,Pro,249
+PROD015,Data Platform Enterprise,Data Platform,Enterprise,699
+PROD016,AI Assistant Basic,AI,Basic,29
+PROD017,AI Assistant Pro,AI,Pro,99
+PROD018,AI Assistant Enterprise,AI,Enterprise,399
+PROD019,Support Standard,Support,Standard,25
+PROD020,Support Premium,Support,Premium,75
