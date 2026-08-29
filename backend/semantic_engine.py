@@ -1,202 +1,63 @@
 """
 MetricMind Semantic Engine
 
-This module is responsible for executing governed metrics.
-
-The AI does NOT directly access the CSV.
-
-The AI asks the Semantic Engine for a metric.
-
-Example:
-
-{
-    "metric": "revenue",
-    "region": "Europe"
-}
-
-The Semantic Engine performs the actual calculation.
+This module is responsible for executing governed metrics against PostgreSQL.
+It provides backward-compatible helper functions while routing through the
+authoritative GovernedSemanticEngine.
 """
 
-import os
-import pandas as pd
-from backend.database import engine
+from typing import Optional, Dict, Any
+from backend.app.semantic.layer import GovernedSemanticEngine
+from backend.app.semantic.models import SemanticQueryRequest, FilterCondition
+from backend.app.semantic.metadata import METRICS_DICTIONARY, DIMENSIONS_DICTIONARY
+from backend.database import execute_raw_sql
 
-from semantic_layer.metrics import (
-    get_metric,
-    get_available_metrics,
-    get_available_dimensions
-)
-
-# ---------------------------------------------------------
-# LOAD DATA FROM POSTGRESQL
-# ---------------------------------------------------------
-
-df = pd.read_sql(
-    """
-    SELECT
-        s.sale_id,
-        s.sale_date AS date,
-        s.customer_id,
-        s.product_id,
-        p.product_name AS product,
-        s.region,
-        s.quantity,
-        s.unit_price,
-        s.discount,
-        s.revenue,
-        s.cost,
-        s.profit,
-        s.margin
-    FROM sales s
-    LEFT JOIN products p
-        ON s.product_id = p.product_id
-    """,
-    engine
-)
-
-# ---------------------------------------------------------
-# APPLY FILTERS
-# ---------------------------------------------------------
-
-def apply_filters(
-    data,
-    region=None,
-    product=None,
-    start_date=None,
-    end_date=None
-):
-    """
-    Apply approved filters to the business dataset.
-    """
-
-    filtered = data.copy()
-
-    if region:
-        filtered = filtered[
-            filtered["region"].str.lower() == region.lower()
-        ]
-
-    if product:
-        filtered = filtered[
-            filtered["product"].str.lower() == product.lower()
-        ]
-
-    if start_date:
-        filtered = filtered[
-            filtered["date"] >= pd.to_datetime(start_date)
-        ]
-
-    if end_date:
-        filtered = filtered[
-            filtered["date"] <= pd.to_datetime(end_date)
-        ]
-
-    return filtered
-
-
-# ---------------------------------------------------------
-# CALCULATE METRIC
-# ---------------------------------------------------------
 
 def calculate_metric(
-    metric,
-    region=None,
-    product=None,
-    start_date=None,
-    end_date=None
-):
+    metric: str,
+    region: Optional[str] = None,
+    product: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+) -> Dict[str, Any]:
     """
-    Calculate a governed MetricMind metric.
-
-    Supported metrics:
-
-    revenue
-    cost
-    profit
-    margin
+    Calculate a governed MetricMind metric against PostgreSQL.
     """
-
-    metric = metric.lower().strip()
-
-    # Check that the metric is officially defined.
-    metric_definition = get_metric(metric)
-
-    if not metric_definition:
+    metric_clean = metric.lower().strip()
+    if metric_clean not in METRICS_DICTIONARY:
         raise ValueError(
-            f"Metric '{metric}' is not available "
-            f"in the MetricMind Semantic Layer."
+            f"Metric '{metric}' is not available in the MetricMind Semantic Layer."
         )
 
-    # Apply filters.
-    filtered = apply_filters(
-        df,
-        region=region,
-        product=product,
-        start_date=start_date,
-        end_date=end_date
+    filters = []
+    if region:
+        filters.append(FilterCondition(dimension="region", operator="=", value=region))
+    if product:
+        filters.append(FilterCondition(dimension="product", operator="=", value=product))
+    if start_date:
+        filters.append(FilterCondition(dimension="date", operator=">=", value=start_date))
+    if end_date:
+        filters.append(FilterCondition(dimension="date", operator="<=", value=end_date))
+
+    req = SemanticQueryRequest(
+        measures=[metric_clean],
+        filters=filters
     )
 
-    # Prevent invalid empty queries.
-    if filtered.empty:
-        raise ValueError(
-            "No data was found for the requested filters."
-        )
+    res = GovernedSemanticEngine.execute_query(req)
 
-    # -----------------------------------------------------
-    # REVENUE
-    # -----------------------------------------------------
+    if res.status != "success" or not res.data:
+        raise ValueError(res.error_message or "No data was found for the requested filters.")
 
-    if metric == "revenue":
-
-        value = filtered["revenue"].sum()
-
-    # -----------------------------------------------------
-    # COST
-    # -----------------------------------------------------
-
-    elif metric == "cost":
-
-        value = filtered["cost"].sum()
-
-    # -----------------------------------------------------
-    # PROFIT
-    # -----------------------------------------------------
-
-    elif metric == "profit":
-
-        revenue = filtered["revenue"].sum()
-        cost = filtered["cost"].sum()
-
-        value = revenue - cost
-
-    # -----------------------------------------------------
-    # MARGIN
-    # -----------------------------------------------------
-
-    elif metric == "margin":
-
-        revenue = filtered["revenue"].sum()
-        cost = filtered["cost"].sum()
-
-        if revenue == 0:
-            value = 0
-
-        else:
-            value = (revenue - cost) / revenue
-
-    else:
-
-        raise ValueError(
-            f"Metric '{metric}' is not implemented."
-        )
+    val = res.data[0].get(metric_clean, 0.0)
+    meta = METRICS_DICTIONARY[metric_clean]
 
     return {
-        "metric": metric_definition["name"],
-        "definition": metric_definition["definition"],
-        "formula": metric_definition["formula"],
-        "value": float(value),
-        "rows_used": len(filtered),
-
+        "metric": meta["label"],
+        "definition": meta["description"],
+        "formula": meta["sql_formula"],
+        "value": float(val),
+        "rows_used": res.row_count,
         "filters": {
             "region": region,
             "product": product,
@@ -206,24 +67,18 @@ def calculate_metric(
     }
 
 
-# ---------------------------------------------------------
-# GET DATASET SUMMARY
-# ---------------------------------------------------------
-
-def get_dataset_summary():
+def get_dataset_summary() -> Dict[str, Any]:
+    """
+    Returns summary metadata from the live PostgreSQL database.
+    """
+    rows_count, _ = execute_raw_sql("SELECT COUNT(*) as cnt FROM sales")
+    regions_rows, _ = execute_raw_sql("SELECT DISTINCT region FROM sales ORDER BY region")
+    products_rows, _ = execute_raw_sql("SELECT DISTINCT product_name FROM products ORDER BY product_name")
 
     return {
-        "rows": len(df),
-        "regions": sorted(
-            df["region"].unique().tolist()
-        ),
-        "products": sorted(
-            df["product"].unique().tolist()
-        ),
-        "metrics": list(
-            get_available_metrics().keys()
-        ),
-        "dimensions": list(
-            get_available_dimensions().keys()
-        )
+        "rows": rows_count[0]["cnt"] if rows_count else 0,
+        "regions": [r["region"] for r in regions_rows],
+        "products": [p["product_name"] for p in products_rows],
+        "metrics": list(METRICS_DICTIONARY.keys()),
+        "dimensions": list(DIMENSIONS_DICTIONARY.keys())
     }

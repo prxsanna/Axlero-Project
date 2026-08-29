@@ -1,0 +1,27 @@
+views:
+  - name: sales_analytics
+    description: "Public Governed View for MetricMind Conversational BI"
+    cubes:
+      - join_path: sales
+        includes:
+          - revenue
+          - cost
+          - profit
+          - margin
+          - margin_pct
+          - quantity
+          - material_cost
+          - shipping_cost
+          - customer_count
+          - transaction_count
+          - sale_id
+          - date
+          - year
+          - quarter
+          - month
+          - region
+          - country
+          - product
+          - category
+          - tier
+          - customer_segment
