@@ -317,7 +317,7 @@ class MetricMindAgent:
         data: List[Dict[str, Any]]
     ) -> str:
         if not data:
-            return f"### Governed Analytics\n\nNo records found in the data warehouse matching your query criteria."
+            return "### Governed Analytics\n\nNo records found in the data warehouse matching your query criteria."
 
         measure_labels = [METRICS_DICTIONARY.get(m, {}).get("label", m) for m in measures]
         measures_str = ", ".join(measure_labels)
@@ -359,7 +359,7 @@ class MetricMindAgent:
                 unit = METRICS_DICTIONARY.get(m, {}).get("unit", "")
                 formatted = f"${val:,.2f}" if unit == "USD" else (f"{val:.2f}%" if unit == "percent" else f"{val:,}")
                 val_strs.append(f"{METRICS_DICTIONARY.get(m, {}).get('label', m)}: **{formatted}**")
-            lines.append(f"{idx}. **{dim_val}** ➔ {', '.join(val_strs)}")
+            lines.append(f"{idx}. **{dim_val}** — {', '.join(val_strs)}")
 
         if len(data) > 15:
             lines.append(f"\n*(Showing top 15 of {len(data)} total records)*")
@@ -443,7 +443,7 @@ class MetricMindAgent:
         explanation_lines = [
             f"### Root Cause Investigation: {region} Performance & Margin Analysis\n",
             f"Based on governed PostgreSQL analytics across {res1.row_count} quarters and {res2.row_count} product categories in **{region}**:\n",
-            "#### 1. Quarterly Performance Trend:"
+            "#### 1. Quarterly Performance Trend"
         ]
 
         for row in res1.data:
@@ -451,18 +451,18 @@ class MetricMindAgent:
             rev = row.get("revenue", 0)
             cost = row.get("cost", 0)
             margin_pct = row.get("margin_pct", 0)
-            explanation_lines.append(f"- **{qtr}**: Revenue = **${rev:,.2f}**, Cost = **${cost:,.2f}**, Margin = **{margin_pct:.2f}%**")
+            explanation_lines.append(f"- **{qtr}**: Revenue = **${rev:,.2f}** | Cost = **${cost:,.2f}** | Margin = **{margin_pct:.2f}%**")
 
-        explanation_lines.append("\n#### 2. Category Performance & Cost Attribution:")
+        explanation_lines.append("\n#### 2. Category Performance & Cost Attribution")
         for row in res2.data:
             cat = row.get("category", "")
             rev = row.get("revenue", 0)
             profit = row.get("profit", 0)
             margin_pct = row.get("margin_pct", 0)
-            explanation_lines.append(f"- **{cat}**: Revenue = **${rev:,.2f}**, Profit = **${profit:,.2f}**, Margin = **{margin_pct:.2f}%**")
+            explanation_lines.append(f"- **{cat}**: Revenue = **${rev:,.2f}** | Profit = **${profit:,.2f}** | Margin = **{margin_pct:.2f}%**")
 
         explanation_lines.append(
-            f"\n#### 3. Key Findings:\n"
+            f"\n#### 3. Key Findings\n"
             f"- Margin performance across {region} reflects product mix and cost absorption across product categories.\n"
             f"- All values are compiled directly from governed relational fact tables without hallucination."
         )

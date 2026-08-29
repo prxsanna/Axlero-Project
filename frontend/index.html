@@ -4,14 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MetricMind — Governed Conversational BI</title>
+    <!-- Marked.js for Clean Markdown to HTML Rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <!-- ECharts CDN for Standalone Visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background: #0b0f17;
-            color: #f5f7fa;
+            color: #f1f5f9;
             min-height: 100vh;
         }
         .container { width: min(1100px, 92%); margin: 0 auto; }
@@ -28,7 +30,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            color: #9aa5b1;
+            color: #94a3b8;
             font-size: 14px;
         }
         .status-dot {
@@ -38,7 +40,7 @@
             background: #10b981;
             box-shadow: 0 0 12px #10b981;
         }
-        .hero { padding: 60px 0 30px; text-align: center; }
+        .hero { padding: 50px 0 25px; text-align: center; }
         .badge {
             display: inline-block;
             padding: 6px 14px;
@@ -47,37 +49,38 @@
             border-radius: 50px;
             color: #60a5fa;
             font-size: 13px;
-            margin-bottom: 18px;
-            font-weight: 500;
+            margin-bottom: 16px;
+            font-weight: 600;
         }
         h1 {
-            font-size: clamp(38px, 6vw, 68px);
-            line-height: 1.05;
-            letter-spacing: -3px;
-            margin-bottom: 18px;
+            font-size: clamp(34px, 5vw, 56px);
+            line-height: 1.1;
+            letter-spacing: -1.5px;
+            margin-bottom: 14px;
+            font-weight: 800;
         }
         .hero p {
             max-width: 680px;
             margin: auto;
-            color: #9ca3af;
-            font-size: 17px;
+            color: #94a3b8;
+            font-size: 16px;
             line-height: 1.6;
         }
         .chat-card {
-            margin: 30px auto;
+            margin: 25px auto 40px;
             max-width: 900px;
             background: #111827;
             border: 1px solid #1f2937;
             border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 25px 80px rgba(0,0,0,0.4);
+            padding: 24px;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.5);
         }
         .input-label {
             display: block;
-            color: #9ca3af;
+            color: #94a3b8;
             font-size: 14px;
             margin-bottom: 10px;
-            font-weight: 500;
+            font-weight: 600;
         }
         .input-row { display: flex; gap: 10px; }
         #question {
@@ -89,9 +92,9 @@
             padding: 16px;
             font-size: 15px;
             outline: none;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
-        #question:focus { border-color: #3b82f6; }
+        #question:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
         button {
             background: #2563eb;
             color: #ffffff;
@@ -112,75 +115,110 @@
             margin-top: 15px;
         }
         .example {
-            background: #1f2937;
-            color: #d1d5db;
-            border: 1px solid #374151;
-            padding: 6px 14px;
+            background: #1e293b;
+            color: #cbd5e1;
+            border: 1px solid #334155;
+            padding: 7px 14px;
             border-radius: 50px;
             cursor: pointer;
             font-size: 13px;
             transition: all 0.2s;
+            font-weight: 500;
         }
         .example:hover {
             color: #60a5fa;
             border-color: #3b82f6;
-            background: rgba(37, 99, 235, 0.1);
+            background: rgba(37, 99, 235, 0.15);
         }
         #result { margin-top: 25px; display: none; }
         .result-card {
             background: #0f172a;
             border: 1px solid #1e293b;
             border-radius: 16px;
-            padding: 24px;
+            padding: 26px;
         }
-        .metric-title { color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+        .metric-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            border-bottom: 1px solid #1e293b;
+            padding-bottom: 16px;
+            margin-bottom: 20px;
+        }
+        .metric-title { color: #60a5fa; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
         .metric-value {
-            font-size: 42px;
+            font-size: 38px;
             font-weight: 800;
-            margin: 6px 0 16px;
             color: #10b981;
             letter-spacing: -1px;
+            margin-top: 4px;
         }
-        .explanation-text {
+
+        /* Clean Styled HTML Content (Markdown Parsed) */
+        .explanation-html {
             color: #e2e8f0;
             font-size: 15px;
-            line-height: 1.6;
-            margin-bottom: 20px;
-            white-space: pre-wrap;
+            line-height: 1.7;
         }
+        .explanation-html h1, .explanation-html h2, .explanation-html h3 {
+            color: #f8fafc;
+            font-size: 18px;
+            font-weight: 700;
+            margin: 20px 0 10px;
+            border-bottom: 1px solid #1e293b;
+            padding-bottom: 6px;
+        }
+        .explanation-html h4 {
+            color: #93c5fd;
+            font-size: 15px;
+            font-weight: 600;
+            margin: 16px 0 8px;
+        }
+        .explanation-html p {
+            margin-bottom: 12px;
+        }
+        .explanation-html ul, .explanation-html ol {
+            margin: 8px 0 16px 20px;
+        }
+        .explanation-html li {
+            margin-bottom: 6px;
+            color: #cbd5e1;
+        }
+        .explanation-html strong {
+            color: #ffffff;
+            font-weight: 700;
+        }
+        .explanation-html code {
+            background: #1e293b;
+            color: #38bdf8;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: monospace;
+        }
+
         #chart-container {
             width: 100%;
-            height: 350px;
-            margin-top: 20px;
+            height: 360px;
+            margin-top: 24px;
             border-radius: 12px;
             background: #0b0f17;
             border: 1px solid #1e293b;
-            padding: 10px;
+            padding: 12px;
             display: none;
         }
-        .details-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 12px;
-            margin-top: 20px;
-        }
-        .detail-box {
-            background: #1e293b;
-            border-radius: 10px;
-            padding: 14px;
-            border: 1px solid #334155;
-        }
-        .detail-label { font-size: 11px; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; }
-        .detail-val { color: #f8fafc; font-size: 14px; font-weight: 500; }
         .governance-box {
-            margin-top: 20px;
-            padding: 14px;
+            margin-top: 24px;
+            padding: 16px;
             border-left: 3px solid #10b981;
             background: rgba(16, 185, 129, 0.08);
-            color: #94a3b8;
+            border-radius: 0 10px 10px 0;
             font-size: 13px;
+            color: #94a3b8;
             line-height: 1.6;
-            border-radius: 0 8px 8px 0;
+        }
+        .governance-box strong {
+            color: #10b981;
         }
         .error-box {
             color: #fca5a5;
@@ -190,7 +228,7 @@
             border-radius: 10px;
             font-size: 14px;
         }
-        .loading { color: #94a3b8; padding: 20px 0; text-align: center; }
+        .loading { color: #94a3b8; padding: 24px 0; text-align: center; font-size: 15px; }
         footer {
             border-top: 1px solid #1f2937;
             padding: 25px 0;
@@ -212,7 +250,7 @@
     </nav>
 
     <section class="hero">
-        <div class="badge">Agentic Conversational BI</div>
+        <div class="badge">Governed Conversational BI</div>
         <h1>Ask your business data.</h1>
         <p>
             Governed natural-language analytics powered by PostgreSQL, dbt, Cube.dev, LangChain, and Google Gemini without allowing the AI to invent metrics or execute arbitrary SQL.
@@ -273,15 +311,20 @@ async function askMetricMind() {
         }
 
         let chartHtml = data.chart_config ? `<div id="chart-container"></div>` : "";
+        let parsedHtml = marked.parse(data.explanation || "");
 
         result.innerHTML = `
             <div class="result-card">
-                <div class="metric-title">${data.metric || 'Governed BI Answer'}</div>
-                <div class="metric-value">${data.answer || 'Analytics Result'}</div>
-                <div class="explanation-text">${data.explanation}</div>
+                <div class="metric-header">
+                    <div>
+                        <div class="metric-title">${data.metric || 'Governed BI Metric'}</div>
+                        <div class="metric-value">${data.answer || 'Analytics Result'}</div>
+                    </div>
+                </div>
+                <div class="explanation-html">${parsedHtml}</div>
                 ${chartHtml}
                 <div class="governance-box">
-                    <strong>✓ Governed Query</strong><br>
+                    <strong>✓ Governed PostgreSQL Query</strong><br>
                     Data Source: ${data.transparency?.data_source || 'PostgreSQL'}<br>
                     Metrics Used: ${(data.transparency?.governed_metrics_used || []).join(', ') || 'Governed'}<br>
                     Execution Time: ${data.transparency?.execution_time_ms || 0} ms
