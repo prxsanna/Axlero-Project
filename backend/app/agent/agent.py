@@ -14,29 +14,59 @@ from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from langchain_core.prompts import PromptTemplate
 
 from backend.app.core.governance import GovernanceGuardrails, PromptInjectionError
 from backend.app.semantic.metadata import METRICS_DICTIONARY, DIMENSIONS_DICTIONARY
 from backend.app.semantic.models import SemanticQueryRequest, FilterCondition
 from backend.app.semantic.layer import GovernedSemanticEngine
 from backend.app.visualization.builder import EChartsBuilder
+from backend.app.agent.tools import (
+    ALL_GOVERNED_TOOLS,
+    execute_governed_query,
+    get_revenue,
+    get_cost,
+    get_profit,
+    get_margin,
+    get_sales_by_region,
+    get_sales_by_product,
+    get_customer_metrics
+)
 
 load_dotenv()
 
 API_KEY = os.getenv("GEMINI_API_KEY")
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 
 class MetricMindAgent:
 
     def __init__(self):
         self.client = genai.Client(api_key=API_KEY) if API_KEY else None
+        self.tools = ALL_GOVERNED_TOOLS
         self.max_steps = 5
+        self.prompt_template = PromptTemplate(
+            input_variables=["measures_list", "dimensions_list", "question"],
+            template=(
+                "You are the intent resolution engine for MetricMind, a Governed Conversational BI platform.\n"
+                "Extract the intended measures, grouping dimensions, and filter conditions from the user's business question.\n\n"
+                "Governed Measures: {measures_list}\n"
+                "Governed Dimensions: {dimensions_list}\n\n"
+                "Rules:\n"
+                "1. Never invent metric names not in Governed Measures.\n"
+                "2. If user asks 'revenue by region', measures=['revenue'], dimensions=['region'].\n"
+                "3. If user asks 'which product generated highest revenue', measures=['revenue'], dimensions=['product'], order_by='revenue', limit=10.\n"
+                "4. If user asks 'what is our profit', measures=['profit'].\n"
+                "5. If user asks 'what is our margin', measures=['margin_pct', 'profit'].\n"
+                "6. Return JSON matching the intent schema.\n\n"
+                "Question: {question}"
+            )
+        )
 
     def process_query(self, user_prompt: str) -> Dict[str, Any]:
         """
         Primary entry point for user business queries.
-        Inspects prompt safety, resolves intent via Gemini/LangChain, executes governed semantic queries,
+        Inspects prompt safety, resolves intent via LangChain/Gemini, invokes governed semantic tools,
         synthesizes explanations, and builds ECharts visual configs.
         """
         start_time = time.time()
@@ -52,34 +82,31 @@ class MetricMindAgent:
         if ("why" in prompt_lower or "cause" in prompt_lower or "drop" in prompt_lower or "decline" in prompt_lower) and ("margin" in prompt_lower or "profit" in prompt_lower or "cost" in prompt_lower):
             return self._execute_root_cause_analysis(user_prompt, reasoning_steps, start_time)
 
-        # Step 2: Intent Resolution & Parameter Extraction via Gemini
+        # Step 2: Intent Resolution via LangChain + Gemini
         intent = self._resolve_intent_with_gemini(user_prompt, reasoning_steps)
 
         # Step 3: Handle Unsupported / Ambiguous Questions Safely
         if not intent.get("measures") and not intent.get("action") == "catalog":
             return self._build_clarification_response(user_prompt, reasoning_steps, start_time)
 
-        # Step 4: Execute Governed Semantic Query
+        # Step 4: Execute Governed Semantic Query via Tools
         return self._execute_resolved_intent(user_prompt, intent, reasoning_steps, start_time)
 
     def _resolve_intent_with_gemini(self, prompt: str, reasoning_steps: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Uses Gemini to translate natural language into a structured semantic plan.
+        Uses LangChain prompt templates and Gemini to translate natural language into a structured semantic plan.
         """
         measures_list = list(METRICS_DICTIONARY.keys())
         dimensions_list = list(DIMENSIONS_DICTIONARY.keys())
-
-        # Direct rule-based fast path for common canonical questions
         prompt_lower = prompt.lower()
         
-        # Region extraction
+        # Fast extraction for canonical filters
         detected_region = None
         for r in ["Asia", "Europe", "North America", "Oceania", "South America"]:
             if r.lower() in prompt_lower:
                 detected_region = r
                 break
 
-        # Product extraction
         detected_product = None
         products_list = [
             "AI Assistant Basic", "AI Assistant Enterprise", "AI Assistant Pro",
@@ -95,29 +122,18 @@ class MetricMindAgent:
                 detected_product = p
                 break
 
-        # Category extraction
         detected_category = None
         for c in ["Analytics", "Cloud", "Security", "CRM", "Data Platform", "AI", "Support"]:
             if c.lower() in prompt_lower:
                 detected_category = c
                 break
 
-        # If Gemini client is available, use LLM structured JSON intent extraction
+        # If Gemini client is available, use LangChain prompt template + LLM structured JSON intent extraction
         if self.client:
-            sys_instruction = (
-                f"You are the intent resolution engine for MetricMind, a Governed Conversational BI platform.\n"
-                f"Your task is to extract the intended measures, grouping dimensions, and filter conditions from the user's business question.\n\n"
-                f"Governed Measures: {measures_list}\n"
-                f"Governed Dimensions: {dimensions_list}\n\n"
-                f"Valid Regions: ['Asia', 'Europe', 'North America', 'Oceania', 'South America']\n"
-                f"Valid Product Categories: ['Analytics', 'Cloud', 'Security', 'CRM', 'Data Platform', 'AI', 'Support']\n\n"
-                f"Rules:\n"
-                f"1. Never invent metric names not in Governed Measures.\n"
-                f"2. If user asks 'revenue by region', measures=['revenue'], dimensions=['region'].\n"
-                f"3. If user asks 'which product generated highest revenue', measures=['revenue'], dimensions=['product'], order_by='revenue', limit=10.\n"
-                f"4. If user asks 'what is our profit', measures=['profit'].\n"
-                f"5. If user asks 'what is our margin', measures=['margin_pct', 'profit'].\n"
-                f"6. Return JSON format matching the schema."
+            sys_instruction = self.prompt_template.format(
+                measures_list=measures_list,
+                dimensions_list=dimensions_list,
+                question=prompt
             )
 
             try:
@@ -153,12 +169,10 @@ class MetricMindAgent:
                 )
                 parsed = json.loads(response.text)
                 
-                # Filter valid measures only
                 valid_measures = [m for m in parsed.get("measures", []) if m in METRICS_DICTIONARY]
                 valid_dimensions = [d for d in parsed.get("dimensions", []) if d in DIMENSIONS_DICTIONARY]
                 valid_filters = [f for f in parsed.get("filters", []) if f.get("dimension") in DIMENSIONS_DICTIONARY]
 
-                # Fallback to explicit regex detections if Gemini missed
                 if detected_region and not any(f.get("dimension") == "region" for f in valid_filters) and "region" not in valid_dimensions:
                     valid_filters.append({"dimension": "region", "operator": "=", "value": detected_region})
                 if detected_product and not any(f.get("dimension") == "product" for f in valid_filters) and "product" not in valid_dimensions:
@@ -166,7 +180,7 @@ class MetricMindAgent:
 
                 reasoning_steps.append({
                     "step": 1,
-                    "action": "Gemini Intent Parsing & Semantic Resolution",
+                    "action": "LangChain + Gemini Intent Parsing & Tool Resolution",
                     "thought": f"Parsed measures={valid_measures}, dimensions={valid_dimensions}, filters={valid_filters}",
                     "query_measures": valid_measures,
                     "query_dimensions": valid_dimensions
@@ -179,8 +193,7 @@ class MetricMindAgent:
                     "limit": parsed.get("limit", 100),
                     "order_by": parsed.get("order_by")
                 }
-            except Exception as e:
-                # Fallback to deterministic parser
+            except Exception:
                 pass
 
         # Deterministic Fallback Parser
@@ -203,9 +216,9 @@ class MetricMindAgent:
 
         if "by region" in prompt_lower or "across regions" in prompt_lower:
             dimensions.append("region")
-        elif "by product" in prompt_lower or "which product" in prompt_lower or "top product" in prompt_lower or "highest revenue" in prompt_lower and "product" in prompt_lower:
+        elif "by product" in prompt_lower or "which product" in prompt_lower or "top product" in prompt_lower or ("highest revenue" in prompt_lower and "product" in prompt_lower):
             dimensions.append("product")
-        elif "by category" in prompt_lower or "category" in prompt_lower and "by" in prompt_lower:
+        elif "by category" in prompt_lower or ("category" in prompt_lower and "by" in prompt_lower):
             dimensions.append("category")
         elif "by quarter" in prompt_lower or "over time" in prompt_lower or "by month" in prompt_lower:
             dimensions.append("quarter" if "quarter" in prompt_lower else "month")
@@ -219,7 +232,7 @@ class MetricMindAgent:
 
         reasoning_steps.append({
             "step": 1,
-            "action": "Semantic Rule & Intent Parsing",
+            "action": "Governed Intent Parsing & Tool Resolution",
             "thought": f"Resolved intent to measures={measures}, dimensions={dimensions}, filters={filters}",
             "query_measures": measures,
             "query_dimensions": dimensions
@@ -244,6 +257,79 @@ class MetricMindAgent:
         dimensions = intent.get("dimensions", [])
         raw_filters = intent.get("filters", [])
         limit = intent.get("limit", 100)
+        order_by = intent.get("order_by")
+
+        # Extract filter values for tool arguments
+        region_filter = None
+        product_filter = None
+        category_filter = None
+        for f in raw_filters:
+            if f.get("dimension") == "region":
+                region_filter = f.get("value")
+            elif f.get("dimension") == "product":
+                product_filter = f.get("value")
+            elif f.get("dimension") == "category":
+                category_filter = f.get("value")
+
+        # Dispatch to specific governed LangChain tool
+        if dimensions == ["region"]:
+            tool_name = "get_sales_by_region"
+            res_dict = get_sales_by_region(
+                metric=measures[0] if measures else "revenue",
+                product=product_filter,
+                category=category_filter
+            )
+        elif dimensions == ["product"]:
+            tool_name = "get_sales_by_product"
+            res_dict = get_sales_by_product(
+                metric=measures[0] if measures else "revenue",
+                region=region_filter,
+                category=category_filter,
+                limit=limit
+            )
+        elif not dimensions and measures == ["revenue"]:
+            tool_name = "get_revenue"
+            res_dict = get_revenue(
+                region=region_filter,
+                product=product_filter,
+                category=category_filter
+            )
+        elif not dimensions and measures == ["cost"]:
+            tool_name = "get_cost"
+            res_dict = get_cost(
+                region=region_filter,
+                product=product_filter,
+                category=category_filter
+            )
+        elif not dimensions and measures == ["profit"]:
+            tool_name = "get_profit"
+            res_dict = get_profit(
+                region=region_filter,
+                product=product_filter,
+                category=category_filter
+            )
+        elif not dimensions and ("margin" in measures or "margin_pct" in measures):
+            tool_name = "get_margin"
+            res_dict = get_margin(
+                region=region_filter,
+                product=product_filter,
+                category=category_filter
+            )
+        elif not dimensions and "customer_count" in measures:
+            tool_name = "get_customer_metrics"
+            res_dict = get_customer_metrics(
+                region=region_filter
+            )
+        else:
+            tool_name = "execute_governed_query"
+            res_dict = execute_governed_query(
+                measures=measures,
+                dimensions=dimensions,
+                filters=raw_filters,
+                limit=limit,
+                order_by=order_by,
+                order_desc=True
+            )
 
         filter_objs = [
             FilterCondition(
@@ -254,42 +340,34 @@ class MetricMindAgent:
             for f in raw_filters
         ]
 
-        q_req = SemanticQueryRequest(
-            measures=measures,
-            dimensions=dimensions,
-            filters=filter_objs,
-            limit=limit,
-            order_by=intent.get("order_by")
-        )
-
-        res = GovernedSemanticEngine.execute_query(q_req)
-
         reasoning_steps.append({
             "step": 2,
-            "action": "Execute Governed Semantic Query",
-            "generated_sql": res.generated_sql,
-            "row_count": res.row_count,
-            "observation": f"Retrieved {res.row_count} rows from PostgreSQL database."
+            "action": f"Invoke Governed Tool: {tool_name}",
+            "tool_invoked": tool_name,
+            "generated_sql": res_dict.get("generated_sql"),
+            "row_count": res_dict.get("row_count", 0),
+            "observation": f"Retrieved {res_dict.get('row_count', 0)} rows from {res_dict.get('data_source', 'Cube/PostgreSQL')}."
         })
 
-        explanation = self._build_executive_explanation(prompt, measures, dimensions, filter_objs, res.data)
-        chart_config = self._build_chart_config(measures, dimensions, res.data)
+        data = res_dict.get("data", [])
+        explanation = self._build_executive_explanation(prompt, measures, dimensions, filter_objs, data)
+        chart_config = self._build_chart_config(measures, dimensions, data)
 
         elapsed_ms = round((time.time() - start_time) * 1000, 2)
 
         return {
             "query": prompt,
             "status": "success",
-            "answer": self._extract_headline_answer(measures, res.data),
+            "answer": self._extract_headline_answer(measures, data),
             "metric": measures[0] if measures else "revenue",
             "explanation": explanation,
             "chart_config": chart_config,
             "reasoning_steps": reasoning_steps,
             "transparency": {
-                "api_calls": [{"step": 1, "request": q_req.model_dump(), "sql": res.generated_sql}],
+                "api_calls": [{"step": 1, "request": {"measures": measures, "dimensions": dimensions, "filters": raw_filters}, "sql": res_dict.get("generated_sql")}],
                 "governed_metrics_used": measures,
-                "data_source": "PostgreSQL (metricmind.sales)",
-                "total_rows_scanned": res.row_count,
+                "data_source": res_dict.get("data_source", "Cube.dev / PostgreSQL (fct_sales)"),
+                "total_rows_scanned": res_dict.get("row_count", 0),
                 "execution_time_ms": elapsed_ms
             }
         }
@@ -326,10 +404,9 @@ class MetricMindAgent:
 
         lines = [f"### Governed Analytics: {measures_str}{header_suffix}\n"]
 
-        # Aggregate Single-Value Result
         if not dimensions and len(data) == 1:
             row = data[0]
-            lines.append("Here is the authoritative metric calculation from the PostgreSQL database:\n")
+            lines.append("Here is the authoritative metric calculation from the governed semantic layer:\n")
             for m in measures:
                 val = row.get(m, 0)
                 unit = METRICS_DICTIONARY.get(m, {}).get("unit", "")
@@ -346,11 +423,9 @@ class MetricMindAgent:
                 lines.append(f"- **{label}**: **{formatted}** `(Formula: {formula})`")
             return "\n".join(lines)
 
-        # Dimensional Breakdown Result
         lines.append("Here is the breakdown by dimension:\n")
         primary_dim = dimensions[0] if dimensions else "item"
 
-        # Show top rows
         for idx, row in enumerate(data[:15], 1):
             dim_val = row.get(primary_dim, "Unknown")
             val_strs = []
@@ -394,7 +469,7 @@ class MetricMindAgent:
     ) -> Dict[str, Any]:
         """
         Executes multi-step reasoning for root cause investigation.
-        Calculates actual differences, cost components, and regional breakdown.
+        Invokes governed tools to analyze quarterly trends and product category distributions.
         """
         prompt_lower = prompt.lower()
         region = "Europe" if "europe" in prompt_lower else ("Asia" if "asia" in prompt_lower else "North America")
@@ -402,51 +477,51 @@ class MetricMindAgent:
         reasoning_steps.append({
             "step": 1,
             "action": "Plan Root Cause Investigation",
-            "thought": f"User asked for margin/cost causal analysis in {region}. Formulating multi-step plan:\n1. Query regional margin and profit by quarter.\n2. Query category and cost component breakdown.\n3. Identify primary drivers."
+            "thought": f"User requested margin/cost causal analysis in {region}. Multi-step plan:\n1. Invoke tool for quarterly regional trend.\n2. Invoke tool for category cost breakdown.\n3. Synthesize findings."
         })
 
-        # Step 1: Query quarter-by-quarter trend for the region
-        q1_req = SemanticQueryRequest(
+        # Step 1: Query quarter-by-quarter trend
+        res1 = execute_governed_query(
             measures=["revenue", "cost", "profit", "margin_pct"],
             dimensions=["quarter"],
-            filters=[FilterCondition(dimension="region", operator="=", value=region)],
+            filters=[{"dimension": "region", "operator": "=", "value": region}],
             limit=20
         )
-        res1 = GovernedSemanticEngine.execute_query(q1_req)
 
         reasoning_steps.append({
             "step": 2,
-            "action": "Execute Governed Semantic Query (Quarterly Trend)",
-            "generated_sql": res1.generated_sql,
-            "row_count": res1.row_count,
-            "observation": f"Retrieved {res1.row_count} quarters of data for {region}."
+            "action": "Invoke Governed Tool: execute_governed_query (Quarterly Trend)",
+            "generated_sql": res1.get("generated_sql"),
+            "row_count": res1.get("row_count", 0),
+            "observation": f"Retrieved {res1.get('row_count', 0)} quarters of data for {region}."
         })
 
         # Step 2: Query product category breakdown
-        q2_req = SemanticQueryRequest(
+        res2 = execute_governed_query(
             measures=["revenue", "cost", "profit", "margin_pct"],
             dimensions=["category"],
-            filters=[FilterCondition(dimension="region", operator="=", value=region)],
+            filters=[{"dimension": "region", "operator": "=", "value": region}],
             limit=20
         )
-        res2 = GovernedSemanticEngine.execute_query(q2_req)
 
         reasoning_steps.append({
             "step": 3,
-            "action": "Execute Governed Semantic Query (Category Breakdown)",
-            "generated_sql": res2.generated_sql,
-            "row_count": res2.row_count,
-            "observation": f"Analyzed {res2.row_count} product categories for cost & margin distribution."
+            "action": "Invoke Governed Tool: execute_governed_query (Category Breakdown)",
+            "generated_sql": res2.get("generated_sql"),
+            "row_count": res2.get("row_count", 0),
+            "observation": f"Analyzed {res2.get('row_count', 0)} product categories for cost & margin distribution."
         })
 
-        # Calculate actual insights from returned data
+        data1 = res1.get("data", [])
+        data2 = res2.get("data", [])
+
         explanation_lines = [
             f"### Root Cause Investigation: {region} Performance & Margin Analysis\n",
-            f"Based on governed PostgreSQL analytics across {res1.row_count} quarters and {res2.row_count} product categories in **{region}**:\n",
+            f"Based on governed semantic analytics across {len(data1)} quarters and {len(data2)} product categories in **{region}**:\n",
             "#### 1. Quarterly Performance Trend"
         ]
 
-        for row in res1.data:
+        for row in data1:
             qtr = row.get("quarter", "")
             rev = row.get("revenue", 0)
             cost = row.get("cost", 0)
@@ -454,7 +529,7 @@ class MetricMindAgent:
             explanation_lines.append(f"- **{qtr}**: Revenue = **${rev:,.2f}** | Cost = **${cost:,.2f}** | Margin = **{margin_pct:.2f}%**")
 
         explanation_lines.append("\n#### 2. Category Performance & Cost Attribution")
-        for row in res2.data:
+        for row in data2:
             cat = row.get("category", "")
             rev = row.get("revenue", 0)
             profit = row.get("profit", 0)
@@ -464,12 +539,12 @@ class MetricMindAgent:
         explanation_lines.append(
             f"\n#### 3. Key Findings\n"
             f"- Margin performance across {region} reflects product mix and cost absorption across product categories.\n"
-            f"- All values are compiled directly from governed relational fact tables without hallucination."
+            f"- All values are compiled directly from governed analytical models without hallucination."
         )
 
         chart_config = EChartsBuilder.build_bar_chart(
             title=f"{region} Quarterly Revenue vs Cost ($)",
-            data=res1.data,
+            data=data1,
             category_dim="quarter",
             value_cols=["revenue", "cost", "profit"]
         )
@@ -486,12 +561,12 @@ class MetricMindAgent:
             "reasoning_steps": reasoning_steps,
             "transparency": {
                 "api_calls": [
-                    {"step": 1, "request": q1_req.model_dump(), "sql": res1.generated_sql},
-                    {"step": 2, "request": q2_req.model_dump(), "sql": res2.generated_sql}
+                    {"step": 1, "request": {"measures": ["revenue", "cost", "profit", "margin_pct"], "dimensions": ["quarter"], "filters": [{"dimension": "region", "operator": "=", "value": region}]}, "sql": res1.get("generated_sql")},
+                    {"step": 2, "request": {"measures": ["revenue", "cost", "profit", "margin_pct"], "dimensions": ["category"], "filters": [{"dimension": "region", "operator": "=", "value": region}]}, "sql": res2.get("generated_sql")}
                 ],
                 "governed_metrics_used": ["revenue", "cost", "profit", "margin_pct"],
-                "data_source": "PostgreSQL (metricmind.sales)",
-                "total_rows_scanned": res1.row_count + res2.row_count,
+                "data_source": res1.get("data_source", "Cube.dev / PostgreSQL (fct_sales)"),
+                "total_rows_scanned": res1.get("row_count", 0) + res2.get("row_count", 0),
                 "execution_time_ms": elapsed_ms
             }
         }

@@ -1,9 +1,7 @@
 """
-MetricMind Semantic Engine
+MetricMind Semantic Engine (Compatibility Layer)
 
-This module is responsible for executing governed metrics against PostgreSQL.
-It provides backward-compatible helper functions while routing through the
-authoritative GovernedSemanticEngine.
+Delegates to canonical GovernedSemanticEngine in backend.app.semantic.layer.
 """
 
 from typing import Optional, Dict, Any
@@ -11,7 +9,6 @@ from backend.app.semantic.layer import GovernedSemanticEngine
 from backend.app.semantic.models import SemanticQueryRequest, FilterCondition
 from backend.app.semantic.metadata import METRICS_DICTIONARY, DIMENSIONS_DICTIONARY
 from backend.database import execute_raw_sql
-
 
 def calculate_metric(
     metric: str,
@@ -21,7 +18,7 @@ def calculate_metric(
     end_date: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Calculate a governed MetricMind metric against PostgreSQL.
+    Calculate a governed MetricMind metric against PostgreSQL / Cube.dev.
     """
     metric_clean = metric.lower().strip()
     if metric_clean not in METRICS_DICTIONARY:
@@ -66,19 +63,18 @@ def calculate_metric(
         }
     }
 
-
 def get_dataset_summary() -> Dict[str, Any]:
     """
-    Returns summary metadata from the live PostgreSQL database.
+    Returns summary metadata from the live PostgreSQL database / dbt marts.
     """
-    rows_count, _ = execute_raw_sql("SELECT COUNT(*) as cnt FROM sales")
-    regions_rows, _ = execute_raw_sql("SELECT DISTINCT region FROM sales ORDER BY region")
-    products_rows, _ = execute_raw_sql("SELECT DISTINCT product_name FROM products ORDER BY product_name")
+    rows_count, _ = execute_raw_sql("SELECT COUNT(*) as cnt FROM fct_sales")
+    regions_rows, _ = execute_raw_sql("SELECT DISTINCT region FROM fct_sales ORDER BY region")
+    products_rows, _ = execute_raw_sql("SELECT DISTINCT product FROM fct_sales ORDER BY product")
 
     return {
         "rows": rows_count[0]["cnt"] if rows_count else 0,
         "regions": [r["region"] for r in regions_rows],
-        "products": [p["product_name"] for p in products_rows],
+        "products": [p["product"] for p in products_rows],
         "metrics": list(METRICS_DICTIONARY.keys()),
         "dimensions": list(DIMENSIONS_DICTIONARY.keys())
     }

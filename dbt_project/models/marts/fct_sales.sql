@@ -10,7 +10,9 @@ stg_customers as (
 )
 
 select
+    s.sale_id,
     s.sale_id as order_id,
+    s.sale_date,
     s.sale_date as order_date,
     extract(year from s.sale_date::date)::integer as year,
     concat('Q', extract(quarter from s.sale_date::date)::integer, ' ', extract(year from s.sale_date::date)::integer) as quarter,
@@ -20,6 +22,7 @@ select
     c.country,
     s.region,
     c.customer_segment,
+    c.acquisition_channel,
     s.product_id,
     p.product_name as product,
     p.category,
@@ -29,9 +32,10 @@ select
     s.discount,
     s.revenue,
     s.cost,
+    s.profit,
+    s.profit as margin,
     round((s.cost * 0.75)::numeric, 2) as material_cost,
     round((s.cost * 0.25)::numeric, 2) as shipping_cost,
-    s.profit as margin,
     case
         when s.revenue > 0 then round(((s.profit / s.revenue) * 100.0)::numeric, 2)
         else 0.0

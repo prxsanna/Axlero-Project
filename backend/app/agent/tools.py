@@ -1,12 +1,13 @@
 """
 Governed Semantic Layer Tools for MetricMind.
 
-Provides controlled, governed tools that the LangChain/Gemini AI Agent can call.
+Provides controlled, governed LangChain-compatible tools that the AI Agent invokes.
 The Agent CANNOT execute raw SQL; it must call these approved semantic functions.
 """
 
-import json
 from typing import List, Dict, Any, Optional
+from langchain_core.tools import tool, StructuredTool
+from pydantic import BaseModel, Field
 
 from backend.app.semantic.metadata import METRICS_DICTIONARY, DIMENSIONS_DICTIONARY
 from backend.app.semantic.models import SemanticQueryRequest, FilterCondition
@@ -16,6 +17,7 @@ from backend.app.semantic.layer import GovernedSemanticEngine
 # CATALOG TOOL
 # ---------------------------------------------------------
 
+@tool
 def get_semantic_catalog() -> Dict[str, Any]:
     """
     Returns the authoritative catalog of governed business metrics and dimensions.
@@ -50,10 +52,12 @@ def execute_governed_query(
     measures: List[str],
     dimensions: Optional[List[str]] = None,
     filters: Optional[List[Dict[str, Any]]] = None,
-    limit: Optional[int] = 100
+    limit: Optional[int] = 100,
+    order_by: Optional[str] = None,
+    order_desc: Optional[bool] = True
 ) -> Dict[str, Any]:
     """
-    Executes a governed semantic query against PostgreSQL and returns structured data.
+    Executes a governed semantic query through Cube.dev / PostgreSQL and returns structured data.
     """
     filter_objs = []
     if filters:
@@ -71,7 +75,9 @@ def execute_governed_query(
         measures=measures,
         dimensions=dimensions or [],
         filters=filter_objs,
-        limit=limit or 100
+        limit=limit or 100,
+        order_by=order_by,
+        order_desc=order_desc if order_desc is not None else True
     )
 
     res = GovernedSemanticEngine.execute_query(req)
@@ -256,7 +262,9 @@ def get_sales_by_product(
         measures=[metric],
         dimensions=["product"],
         filters=filters,
-        limit=limit
+        limit=limit,
+        order_by=metric,
+        order_desc=True
     )
 
 
@@ -280,3 +288,16 @@ def get_customer_metrics(
         measures=["customer_count", "revenue", "quantity", "transaction_count"],
         filters=filters
     )
+
+
+ALL_GOVERNED_TOOLS = [
+    get_semantic_catalog,
+    get_revenue,
+    get_cost,
+    get_profit,
+    get_margin,
+    get_sales_by_region,
+    get_sales_by_product,
+    get_customer_metrics,
+    execute_governed_query
+]

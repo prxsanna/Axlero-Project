@@ -23,25 +23,25 @@ Accepts natural-language business questions and returns governed analytical resu
   "status": "success",
   "answer": "$9,809,305.67",
   "metric": "revenue",
-  "explanation": "### Governed Analytics: Revenue (Filters: region = 'Europe')\n\n- **Revenue**: **$9,809,305.67** `(Formula: SUM(s.revenue))`",
+  "explanation": "### Governed Analytics: Revenue (Filters: region = 'Europe')\n\n- **Revenue**: **$9,809,305.67** `(Formula: SUM(f.revenue))`",
   "chart_config": null,
   "reasoning_steps": [
     {
       "step": 1,
-      "action": "Gemini Intent Parsing & Semantic Resolution",
+      "action": "LangChain + Gemini Intent Parsing & Tool Resolution",
       "thought": "Parsed measures=['revenue'], dimensions=[], filters=[{'dimension': 'region', 'operator': '=', 'value': 'Europe'}]"
     },
     {
       "step": 2,
-      "action": "Execute Governed Semantic Query",
-      "generated_sql": "SELECT SUM(s.revenue) AS revenue FROM sales s ...",
+      "action": "Invoke Governed Tool: execute_governed_query",
+      "generated_sql": "SELECT SUM(f.revenue) AS revenue FROM fct_sales f ...",
       "row_count": 1
     }
   ],
   "transparency": {
     "api_calls": [...],
     "governed_metrics_used": ["revenue"],
-    "data_source": "PostgreSQL (metricmind.sales)",
+    "data_source": "Cube.dev / PostgreSQL (fct_sales)",
     "total_rows_scanned": 1,
     "execution_time_ms": 12.4
   }

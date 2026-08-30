@@ -19,15 +19,15 @@ The MetricMind Semantic Layer solves this by defining metric logic once centrall
 
 | Metric Key | Label | Formula | Description |
 |---|---|---|---|
-| `revenue` | Revenue | `SUM(s.revenue)` | Gross sales revenue ($) |
-| `cost` | Total Cost | `SUM(s.cost)` | Total operational cost ($) |
-| `profit` | Operating Profit | `SUM(s.profit)` | Net operating profit ($) |
-| `margin` | Operating Margin | `SUM(s.profit)` | Net operating dollar margin ($) |
+| `revenue` | Revenue | `SUM(f.revenue)` | Gross sales revenue ($) |
+| `cost` | Total Cost | `SUM(f.cost)` | Total operational cost ($) |
+| `profit` | Operating Profit | `SUM(f.profit)` | Net operating profit ($) |
+| `margin` | Operating Margin | `SUM(f.profit)` | Net operating dollar margin ($) |
 | `margin_pct` | Margin Percentage | `(SUM(profit) / SUM(revenue)) * 100` | Net margin percentage (%) |
-| `quantity` | Quantity Sold | `SUM(s.quantity)` | Total units sold |
-| `customer_count` | Customer Count | `COUNT(DISTINCT s.customer_id)` | Unique transacting customers |
-| `material_cost` | Material Cost | `SUM(ROUND(s.cost * 0.75, 2))` | Material & components cost |
-| `shipping_cost` | Shipping Cost | `SUM(ROUND(s.cost * 0.25, 2))` | Logistics & freight cost |
+| `quantity` | Quantity Sold | `SUM(f.quantity)` | Total units sold |
+| `customer_count` | Customer Count | `COUNT(DISTINCT f.customer_id)` | Unique transacting customers |
+| `material_cost` | Material Cost | `SUM(ROUND(f.cost * 0.75, 2))` | Material & components cost |
+| `shipping_cost` | Shipping Cost | `SUM(ROUND(f.cost * 0.25, 2))` | Logistics & freight cost |
 
 ---
 

@@ -26,6 +26,23 @@ DATABASE_URL = (
 
 _engine: Optional[Engine] = None
 
+def verify_dbt_models(eng: Optional[Engine] = None) -> bool:
+    """
+    Verifies that the authoritative dbt analytical marts (fct_sales, dim_products, dim_customers)
+    exist in the PostgreSQL database.
+    """
+    if eng is None:
+        eng = _engine
+    if eng is None:
+        return False
+
+    try:
+        with eng.connect() as conn:
+            result = conn.execute(text("SELECT 1 FROM information_schema.tables WHERE table_name = 'fct_sales'"))
+            return bool(result.scalar())
+    except Exception:
+        return False
+
 def get_engine() -> Engine:
     global _engine
     if _engine is None:
@@ -49,7 +66,8 @@ def check_connection() -> Dict[str, Any]:
             "host": DB_HOST,
             "port": DB_PORT,
             "database": DB_NAME,
-            "user": DB_USER
+            "user": DB_USER,
+            "dbt_models": "fct_sales, dim_products, dim_customers active"
         }
     except Exception as e:
         return {

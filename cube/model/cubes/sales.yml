@@ -2,33 +2,32 @@ cubes:
   - name: sales
     sql: >
       SELECT
-        s.sale_id,
-        s.sale_date,
-        EXTRACT(YEAR FROM s.sale_date)::integer AS year,
-        CONCAT('Q', EXTRACT(QUARTER FROM s.sale_date)::integer, ' ', EXTRACT(YEAR FROM s.sale_date)::integer) AS quarter,
-        TO_CHAR(s.sale_date, 'YYYY-MM') AS month,
-        s.customer_id,
-        c.customer_name,
-        c.country,
-        c.customer_segment,
-        s.product_id,
-        p.product_name AS product,
-        p.category,
-        p.tier,
-        s.region,
-        s.quantity,
-        s.unit_price,
-        s.discount,
-        s.revenue,
-        s.cost,
-        s.profit,
-        s.margin,
-        ROUND((s.cost * 0.75)::numeric, 2) AS material_cost,
-        ROUND((s.cost * 0.25)::numeric, 2) AS shipping_cost
-      FROM sales s
-      LEFT JOIN products p ON s.product_id = p.product_id
-      LEFT JOIN customers c ON s.customer_id = c.customer_id
-      LEFT JOIN customer_status cs ON s.customer_id = cs.customer_id
+        sale_id,
+        sale_date,
+        year,
+        quarter,
+        month,
+        customer_id,
+        customer_name,
+        country,
+        customer_segment,
+        acquisition_channel,
+        product_id,
+        product,
+        category,
+        tier,
+        region,
+        quantity,
+        unit_price,
+        discount,
+        revenue,
+        cost,
+        profit,
+        margin,
+        margin_pct,
+        material_cost,
+        shipping_cost
+      FROM fct_sales
 
     measures:
       - name: revenue

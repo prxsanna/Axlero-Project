@@ -122,19 +122,20 @@ def get_metrics_catalog():
 @router.get("/dataset")
 def dataset_summary():
     """
-    Returns summary statistics and metadata of the underlying PostgreSQL business dataset.
+    Returns summary statistics and metadata of the underlying PostgreSQL business dataset & dbt marts.
     """
     try:
-        rows_count, _ = execute_raw_sql("SELECT COUNT(*) as cnt FROM sales")
-        regions_rows, _ = execute_raw_sql("SELECT DISTINCT region FROM sales ORDER BY region")
-        products_rows, _ = execute_raw_sql("SELECT DISTINCT product_name FROM products ORDER BY product_name")
-        categories_rows, _ = execute_raw_sql("SELECT DISTINCT category FROM products ORDER BY category")
+        rows_count, _ = execute_raw_sql("SELECT COUNT(*) as cnt FROM fct_sales")
+        regions_rows, _ = execute_raw_sql("SELECT DISTINCT region FROM fct_sales ORDER BY region")
+        products_rows, _ = execute_raw_sql("SELECT DISTINCT product FROM fct_sales ORDER BY product")
+        categories_rows, _ = execute_raw_sql("SELECT DISTINCT category FROM fct_sales ORDER BY category")
 
         return {
             "database": "PostgreSQL (metricmind)",
+            "dbt_mart": "fct_sales",
             "total_sales_rows": rows_count[0]["cnt"] if rows_count else 0,
             "regions": [r["region"] for r in regions_rows],
-            "products": [p["product_name"] for p in products_rows],
+            "products": [p["product"] for p in products_rows],
             "categories": [c["category"] for c in categories_rows],
             "metrics": list(METRICS_DICTIONARY.keys()),
             "dimensions": list(DIMENSIONS_DICTIONARY.keys())

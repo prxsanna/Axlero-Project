@@ -50,6 +50,9 @@ yarn-error.log*
 # dbt
 dbt_packages/
 target/
+logs/
+dbt_project/logs/
+dbt_project/.user.yml
 
 # Testing & Coverage
 .pytest_cache/
