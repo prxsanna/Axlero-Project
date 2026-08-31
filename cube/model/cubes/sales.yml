@@ -1,0 +1,141 @@
+cubes:
+  - name: sales
+    sql: >
+      SELECT
+        sale_id,
+        sale_date,
+        year,
+        quarter,
+        month,
+        customer_id,
+        customer_name,
+        country,
+        customer_segment,
+        acquisition_channel,
+        product_id,
+        product,
+        category,
+        tier,
+        region,
+        quantity,
+        unit_price,
+        discount,
+        revenue,
+        cost,
+        profit,
+        margin,
+        margin_pct,
+        material_cost,
+        shipping_cost
+      FROM fct_sales
+
+    measures:
+      - name: revenue
+        title: "Total Revenue"
+        sql: revenue
+        type: sum
+        format: currency
+
+      - name: cost
+        title: "Total Cost"
+        sql: cost
+        type: sum
+        format: currency
+
+      - name: profit
+        title: "Operating Profit"
+        sql: profit
+        type: sum
+        format: currency
+
+      - name: margin
+        title: "Operating Margin"
+        sql: profit
+        type: sum
+        format: currency
+
+      - name: margin_pct
+        title: "Margin Percentage"
+        sql: >
+          CASE
+            WHEN SUM(revenue) = 0 THEN 0
+            ELSE (SUM(profit) / SUM(revenue)) * 100
+          END
+        type: number
+        format: percent
+
+      - name: quantity
+        title: "Quantity Sold"
+        sql: quantity
+        type: sum
+
+      - name: material_cost
+        title: "Material Cost"
+        sql: material_cost
+        type: sum
+        format: currency
+
+      - name: shipping_cost
+        title: "Shipping Cost"
+        sql: shipping_cost
+        type: sum
+        format: currency
+
+      - name: customer_count
+        title: "Customer Count"
+        sql: customer_id
+        type: count_distinct
+
+      - name: transaction_count
+        title: "Transaction Count"
+        type: count
+
+    dimensions:
+      - name: sale_id
+        sql: sale_id
+        type: string
+        primary_key: true
+
+      - name: date
+        sql: sale_date
+        type: time
+
+      - name: year
+        sql: year
+        type: number
+
+      - name: quarter
+        sql: quarter
+        type: string
+
+      - name: month
+        sql: month
+        type: string
+
+      - name: region
+        sql: region
+        type: string
+
+      - name: country
+        sql: country
+        type: string
+
+      - name: product
+        sql: product
+        type: string
+
+      - name: category
+        sql: category
+        type: string
+
+      - name: tier
+        sql: tier
+        type: string
+
+      - name: customer_segment
+        sql: customer_segment
+        type: string
+
+      - name: customer_name
+        sql: customer_name
+        type: string
