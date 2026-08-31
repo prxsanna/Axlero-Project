@@ -1,14 +1,14 @@
 {
-  "name": "cube",
-  "version": "0.0.1",
+  "name": "metricmind-cube",
+  "version": "1.0.0",
   "private": true,
+  "description": "Cube.dev Semantic Layer for MetricMind",
   "scripts": {
-    "dev": "cubejs-server"
+    "dev": "cubejs-server",
+    "build": "cubejs-server"
   },
-  "template": "docker",
-  "templateVersion": "1.7.30",
-  "devDependencies": {
-    "@cubejs-backend/postgres-driver": "^1.7.30",
-    "@cubejs-backend/server": "^1.7.30"
+  "dependencies": {
+    "@cubejs-backend/postgres-driver": "^0.35.0",
+    "@cubejs-backend/server": "^0.35.0"
   }
 }

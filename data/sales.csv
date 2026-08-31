@@ -1,0 +1,13 @@
+date,region,product,revenue,cost
+2026-07-01,Europe,Software,120000,85000
+2026-07-05,Europe,Hardware,150000,105000
+2026-07-10,Europe,Services,130000,95000
+2026-07-15,Asia,Software,180000,120000
+2026-07-20,Asia,Hardware,200000,140000
+2026-07-25,North America,Software,250000,170000
+2026-08-01,Europe,Software,160000,110000
+2026-08-05,Asia,Services,220000,150000
+2026-08-10,North America,Hardware,270000,185000
+2026-08-15,Europe,Services,150000,100000
+2026-08-20,Asia,Hardware,210000,145000
+2026-08-25,North America,Services,260000,180000

@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: fct_sales
+    description: "Governed Fact Table for Corporate Sales, Costs, and Margin Analytics"
+    columns:
+      - name: order_id
+        description: "Primary identifier for the transaction"
+        tests:
+          - unique
+          - not_null
+      - name: revenue
+        description: "Authoritative metric: SUM(revenue)"
+      - name: cost
+        description: "Authoritative metric: SUM(cost)"
+      - name: margin
+        description: "Authoritative metric: SUM(profit)"
+      - name: margin_pct
+        description: "Authoritative metric: (SUM(profit) / SUM(revenue)) * 100"
+      - name: material_cost
+        description: "Authoritative metric: SUM(material_cost)"
+      - name: shipping_cost
+        description: "Authoritative metric: SUM(shipping_cost)"
+
+  - name: dim_products
+    description: "Authoritative Product Dimension Table"
+    columns:
+      - name: product_id
+        description: "Primary key for products"
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_customers
+    description: "Authoritative Customer Dimension Table with Segment and Churn Status"
+    columns:
+      - name: customer_id
+        description: "Primary key for customers"
+        tests:
+          - unique
+          - not_null
