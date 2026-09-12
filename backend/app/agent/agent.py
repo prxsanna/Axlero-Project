@@ -378,6 +378,12 @@ class MetricMindAgent:
         first_row = data[0]
         m = measures[0] if measures else "revenue"
         val = first_row.get(m, 0)
+
+        try:
+            val = float(val)
+        except (TypeError, ValueError):
+            val = 0.0
+
         unit = METRICS_DICTIONARY.get(m, {}).get("unit", "")
         if unit == "USD":
             return f"${val:,.2f}"
@@ -397,47 +403,92 @@ class MetricMindAgent:
         if not data:
             return "### Governed Analytics\n\nNo records found in the data warehouse matching your query criteria."
 
-        measure_labels = [METRICS_DICTIONARY.get(m, {}).get("label", m) for m in measures]
+        measure_labels = [
+            METRICS_DICTIONARY.get(m, {}).get("label", m)
+            for m in measures
+        ]
+
         measures_str = ", ".join(measure_labels)
-        filter_str = ", ".join([f"{f.dimension} = '{f.value}'" for f in filters])
+        filter_str = ", ".join(
+            [f"{f.dimension} = '{f.value}'" for f in filters]
+        )
         header_suffix = f" (Filters: {filter_str})" if filters else ""
 
-        lines = [f"### Governed Analytics: {measures_str}{header_suffix}\n"]
+        lines = [
+            f"### Governed Analytics: {measures_str}{header_suffix}\n"
+        ]
 
         if not dimensions and len(data) == 1:
             row = data[0]
-            lines.append("Here is the authoritative metric calculation from the governed semantic layer:\n")
+
+            lines.append(
+                "Here is the authoritative metric calculation from the governed semantic layer:\n"
+            )
+
             for m in measures:
                 val = row.get(m, 0)
+
+                # Convert database/API string values to numbers
+                try:
+                    val = float(val)
+                except (TypeError, ValueError):
+                    val = 0.0
+
                 unit = METRICS_DICTIONARY.get(m, {}).get("unit", "")
                 label = METRICS_DICTIONARY.get(m, {}).get("label", m)
                 formula = METRICS_DICTIONARY.get(m, {}).get("sql_formula", "")
-                
+
                 if unit == "USD":
                     formatted = f"${val:,.2f}"
                 elif unit == "percent":
                     formatted = f"{val:.2f}%"
                 else:
-                    formatted = f"{val:,}"
-                
-                lines.append(f"- **{label}**: **{formatted}** `(Formula: {formula})`")
+                    formatted = f"{val:,.0f}"
+
+                lines.append(
+                    f"- **{label}**: **{formatted}** `(Formula: {formula})`"
+                )
+
             return "\n".join(lines)
 
         lines.append("Here is the breakdown by dimension:\n")
+
         primary_dim = dimensions[0] if dimensions else "item"
 
         for idx, row in enumerate(data[:15], 1):
             dim_val = row.get(primary_dim, "Unknown")
             val_strs = []
+
             for m in measures:
                 val = row.get(m, 0)
+
+                # Convert database/API string values to numbers
+                try:
+                    val = float(val)
+                except (TypeError, ValueError):
+                    val = 0.0
+
                 unit = METRICS_DICTIONARY.get(m, {}).get("unit", "")
-                formatted = f"${val:,.2f}" if unit == "USD" else (f"{val:.2f}%" if unit == "percent" else f"{val:,}")
-                val_strs.append(f"{METRICS_DICTIONARY.get(m, {}).get('label', m)}: **{formatted}**")
-            lines.append(f"{idx}. **{dim_val}** — {', '.join(val_strs)}")
+
+                if unit == "USD":
+                    formatted = f"${val:,.2f}"
+                elif unit == "percent":
+                    formatted = f"{val:.2f}%"
+                else:
+                    formatted = f"{val:,.0f}"
+
+                val_strs.append(
+                    f"{METRICS_DICTIONARY.get(m, {}).get('label', m)}: **{formatted}**"
+                )
+
+            lines.append(
+                f"{idx}. **{dim_val}** — {', '.join(val_strs)}"
+            )
 
         if len(data) > 15:
-            lines.append(f"\n*(Showing top 15 of {len(data)} total records)*")
+            lines.append(
+                f"\n*(Showing top 15 of {len(data)} total records)*"
+            )
 
         return "\n".join(lines)
 

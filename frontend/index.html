@@ -324,7 +324,7 @@ async function askMetricMind() {
                 <div class="explanation-html">${parsedHtml}</div>
                 ${chartHtml}
                 <div class="governance-box">
-                    <strong>✓ Governed PostgreSQL Query</strong><br>
+                    <strong>✓ ${data.transparency?.data_source?.includes('Cube.dev') ? 'Governed Cube.dev Query' : 'Governed PostgreSQL Query'}</strong><br>
                     Data Source: ${data.transparency?.data_source || 'PostgreSQL'}<br>
                     Metrics Used: ${(data.transparency?.governed_metrics_used || []).join(', ') || 'Governed'}<br>
                     Execution Time: ${data.transparency?.execution_time_ms || 0} ms

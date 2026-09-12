@@ -207,7 +207,7 @@ class GovernedSemanticEngine:
             cube_data = None
             cube_headers = {"Authorization": f"Bearer {CUBE_API_SECRET}"}
             try:
-                with httpx.Client(timeout=1.0) as client:
+                with httpx.Client(timeout=10.0) as client:
                     cube_res = client.post(CUBE_API_URL, json=cube_query, headers=cube_headers)
                     if cube_res.status_code == 200:
                         json_resp = cube_res.json()
