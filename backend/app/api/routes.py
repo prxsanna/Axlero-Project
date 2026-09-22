@@ -67,7 +67,7 @@ def ask_endpoint(request: AskRequest) -> Dict[str, Any]:
                     "semantic_layer": "MetricMind Governed Semantic Layer",
                     "raw_sql_generated": False,
                     "metric_validated": True,
-                    "data_source": "PostgreSQL (metricmind)"
+                    "data_source": response.get("transparency", {}).get("data_source", "Unknown")
                 }
             }
         else:
